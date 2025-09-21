@@ -1,0 +1,19 @@
+# I.K.E.M.E.N-Go standard debug.zss (for Lua console implementation)
+# Authors: Jesuszilla
+# License: MIT
+#
+# PLEASE REMEMBER TO REMOVE THIS FILE WHEN DISTRIBUTING YOUR GAME!!!
+#
+[StateDef +1]
+ignorehitpause if !isHelper {
+	# Disable ctrl if window active
+	if !AILevel {
+		if map(_IKSys_debug_disable_ctrl) && ctrl {
+			ctrlSet { value: 0 }
+			map(_IKSys_debug_ctrl_reset) := 1;
+		} else if !ctrl && !map(_IKSys_debug_disable_ctrl) && StateNo < 40 && MoveType = I && map(_IKSys_debug_ctrl_reset) {
+			ctrlSet { value: 1 }
+			map(_IKSys_debug_ctrl_reset) := 0;
+		}
+	}
+}
