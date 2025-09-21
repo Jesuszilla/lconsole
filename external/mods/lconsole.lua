@@ -959,6 +959,9 @@ end
 
 function lconsole.loop()
 	local debugFontScale = gameOption('debug.fontScale')
+	if debugmode("roundreset") then
+		didDisableCtrl = false
+	end
 	if consoleOn then
 		if consoleRect ~= nil then consoleRect:draw() end
 		if consoleText ~= nil then textImgDraw(consoleText) end
@@ -968,22 +971,14 @@ function lconsole.loop()
 			end
 		end
 
-		if roundstate() > 1 then
+		if not ishelper() and map('_iksys_debug_disable_ctrl') == 0 and roundstate() > 1 then
 			-- Disable ctrl for all players
 			for i=1,numplayer() do
-				if player(i) and map('_iksys_debug_disable_ctrl') == 0 then
+				if player(i) then
 					mapSet('_iksys_debug_disable_ctrl', 1, 'set')
 				end
 			end
 			didDisableCtrl = true
-		end
-		if debugmode("roundreset") then
-			for i=1,numplayer() do
-				if player(i) then
-					mapSet('_iksys_debug_disable_ctrl', 0, 'set')
-				end
-			end
-			didDisableCtrl = false
 		end
 
 		-- Only while input accepted
