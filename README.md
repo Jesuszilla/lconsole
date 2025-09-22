@@ -7,6 +7,7 @@ to I.K.E.M.E.N-Go, this module is for you!
 * Execute arbitrary Lua commands
 * Uses config.ini debug font setting (change your debug font to change the font in the LConsole terminal)
 * Dual output - prints to the interactive console as well as the terminal.
+* Automatic text and word wrapping.
 
 ## Basic Usage
 The main Lua methods users may find useful are the `findEntityById`, `findEntityByName`, `man`, and `register_man` commands.
