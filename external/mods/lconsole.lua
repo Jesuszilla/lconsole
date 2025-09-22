@@ -76,12 +76,14 @@ local funcs = {}
 
 --#region SETTINGS
 
-lconsole.NUM_CONSOLE_COLS  = 75   -- you may need to change this depending on your font
+lconsole.NUM_CONSOLE_COLS  = 75   -- this is automatically calculated
 lconsole.NUM_CONSOLE_ROWS  = 20   -- number of rows to display in the console
 lconsole.TOTAL_IGNORE_TIME = 4    -- adjust for key buffer dead time
 lconsole.CURSOR_BLINK_RATE = 30   -- cursor blink rate
 lconsole.CURSOR_CHAR       = '_'  -- cursor character
 lconsole.CONSOLE_PREFIX    = '> ' -- console prefix string
+lconsole.FONT_SCALE        = 0.5  -- Uniform scale for terminal font
+lconsole.CONSOLE_WIDTH_PCT = 0.85 -- Console width (in percentage of screen width)
 --#endregion
 
 -- Legacy MConsole command
@@ -416,7 +418,7 @@ register_man('leftedge', 'Returns the left edge pos of the stage.', 'None', 'lef
 register_man('lerp', 'Linear interpolation. Takes three arguments, and returns a number between two specified arguments at a specific increment.', 'a (float) - The min value.\nb (float) - The max value.')
 register_man('life', 'Returns the current life this entity has remaining.', 'None', 'life (int) - The remaining life the entity has remaining.')
 register_man('lifemax', 'Returns the maximum amount of life the current entity can have.', 'None', 'lifeMax (int) - The maximum amount of life this entity can have.')
-register_man('loadDebugFont', 'Loads the specified font file as the debug font at the given scale. The default debug font is font/Open_Sans.def.', 'fontPath - The path to the debug font to use.\nscale (float) - The scale for the debug font')
+register_man('loadDebugFont', 'Loads the specified font file as the debug font at the given scale. The default debug font is font/Open_Sans.def.', 'fontPath - The path to the debug font to use.\nheight (int) - The height for the font.')
 register_man('loadDebugInfo', 'Loads the named debug info functions for running.', 'debugInfo (table) - The table of debug info function names to run.')
 register_man('loadDebugStatus', 'Loads the named debug status functions for running.', 'debugStatus (table) - The table of debug status function names to run.')
 register_man('loadGameOption', 'Loads the given config.ini and overwrites the current settings.', 'cfgFile (string) - The full or relative path to the config.ini to load.', 'cfg (Config Userdata) - The Userdata reference to the new Config.')
@@ -617,7 +619,7 @@ register_man('sndNew', 'Loads a new SND file from the given path.', 'sndPath (st
 register_man('sndPlay', 'Plays a sound from a .SND file.', 'snd (Snd) - The SND to use\ngroup (int) - Sound group\nnumber (int) - Sound number\nvs (int) - Volume scale (0-100)\npan (float) - Panning\nloopstart (int) - Loop start sample\nloopend (int) - Loop end sample\nstartposition (int) - Start position sample')
 register_man('sndPlaying', 'Returns true if the given sound is playing.', 'snd (Snd) - SND instance to use\ngroup (int) - Sound group\nnumber (int) - Sound number', 'true if the given sound is playing, false otherwise')
 register_man('sndStop', 'Stops the sound playing on the given channel', 'ch (int) - The channel of the sound to stop playing.')
-register_man('soundvar', 'Returns the specified sound channel parameter. Use -1 for channelNo to find the first sound available.', '')
+register_man('soundvar', 'Returns the specified sound channel parameter. Use -1 for channelNo to find the first sound available.', 'ch (int) - The channel of the sound to check.\nparam (string) - The parameter to retrieve. Valid values are group, number, freqmul, isplaying, length, loopcount, loopstart, loopend, pan, position, priority, startposition, volumescale.', 'res (dynamic) - The requested data from the specified playing sound.')
 register_man('sprpriority', 'Returns the current sprite layer priority of the active entity.', 'None', 'sprPriority (int) - The sprite priority of the current entity.')
 register_man('sszRandom', 'Returns a random integer from the game seed. Use this to prevent desyncs.', 'None', 'random (int) - A random integer.')
 register_man('stagebackedgedist', 'Returns the distance to the stage edge (corner) behind the player.', 'None', 'sbed (float) - The distance to the stage edge (corner) behind the player.')
@@ -717,13 +719,16 @@ local lastHistoryItem = 0
 local consoleLines = {}
 local consoleHistory = {}
 local ignoreTime = 0 -- to prevent appending a bunch of characters when the user is just trying to type 1
+local localCoordScale = 1.0
 
 function toggleConsole()
 	resetKey()
     consoleOn = not consoleOn
     -- ON
 	if consoleOn then
-		local debugFontScale = gameOption("debug.fontScale")
+		local width = fightscreenvar('info.localcoord.x')
+		localCoordScale = width / gameOption('video.gameWidth')
+		local debugFontScale = lconsole.FONT_SCALE * localCoordScale
 
 		-- Get the console font now
 		if consoleFont == nil then
@@ -735,15 +740,22 @@ function toggleConsole()
 
         -- Create the overlay
 		if consoleRect == nil then
-			local x1 = 8
-			local y1 = 10
-			local height = consoleFontTotalHeight * debugFontScale * lconsole.NUM_CONSOLE_ROWS
-			local width = gameOption('video.GameWidth')
+			local fslcy = fightscreenvar('info.localcoord.y')
+			local x = width - main.f_round(width * lconsole.CONSOLE_WIDTH_PCT)
+			local y = 10
+			local maxHeight = fslcy - consoleFontTotalHeight * debugFontScale * 2
+
+			local height = math.min(maxHeight, consoleFontTotalHeight * debugFontScale * lconsole.NUM_CONSOLE_ROWS)
+
+			if height >= maxHeight then
+				lconsole.NUM_CONSOLE_ROWS = (height / consoleFontTotalHeight / debugFontScale)
+			end
+
             consoleRect = rect:create({
-					x1 = x1,
-					y1 = y1,
-					x2 = width - x1*2,
-					y2 = height + y1 * debugFontScale,
+					x1 = x,
+					y1 = y,
+					x2 = width - x*2,
+					y2 = height + y*debugFontScale + 1,--height - y * localCoordScale,
 					r = 32,
 					g = 32,
 					b = 32,
@@ -752,6 +764,9 @@ function toggleConsole()
 					defsc = false
 				}
 			)
+
+			local singleCharWidth = fontGetTextWidth(consoleFont, 'W', 0) * debugFontScale
+			lconsole.NUM_CONSOLE_COLS = math.floor(consoleRect.x2 / singleCharWidth) - 3
         end
 		if consoleText == nil then
 			-- Create the console text object
@@ -764,7 +779,7 @@ function toggleConsole()
 				local consoleLineTextImg = textImgNew()
 				textImgSetFont(consoleLineTextImg, consoleFont)
 				textImgSetBank(consoleLineTextImg, 0)
-				textImgSetPos(consoleLineTextImg, consoleRect.x1 + 4, consoleRect.y1 + i*(consoleFontTotalHeight * debugFontScale))
+				textImgSetPos(consoleLineTextImg, consoleRect.x1 + (4 * localCoordScale * debugFontScale), consoleRect.y1 + i*(consoleFontTotalHeight * debugFontScale))
 				textImgSetScale(consoleLineTextImg, debugFontScale, debugFontScale)
 				textImgSetWindow(consoleLineTextImg, consoleRect.x1, consoleRect.y1, consoleRect.x2, consoleRect.y2 - (consoleFontTotalHeight * debugFontScale))
 				local consoleEntry = {text = '', textImgObj = consoleLineTextImg}
@@ -842,7 +857,7 @@ end
 function printToConsoleFormatted(str)
 	-- Split by newline
 	local substrings = {}
-	local debugFontScale = gameOption('debug.fontScale')
+	local debugFontScale = lconsole.FONT_SCALE
 	for line in str:gmatch('([^\n]*)\n?') do
 		table.insert(substrings, line)
 	end
@@ -860,7 +875,7 @@ function printToConsoleFormatted(str)
 			local lineBuffer = StringBuffer.new()
 			for _, word in ipairs(words) do
 				local strToFit = lineBuffer:toString() .. ' ' .. word
-				if (fontGetTextWidth(consoleFont, strToFit, 0) * debugFontScale) <= screenwidth() then
+				if (fontGetTextWidth(consoleFont, strToFit, 0) * debugFontScale) <= (consoleRect.x2 - consoleRect.x1) * localCoordScale then
 					-- Looks good, add the word to the line buffer
 					lineBuffer:append(word .. ' ')
 				else
@@ -904,7 +919,7 @@ function lconsole.printString(str)
 	for line in str:gmatch('([^\n]*)\n?') do
 		table.insert(substrings, line)
 	end
-	local debugFontScale = gameOption('debug.fontScale')
+	local debugFontScale = lconsole.FONT_SCALE
 
 	-- Print each substring
 	for i, substring in ipairs(substrings) do
@@ -922,30 +937,57 @@ function lconsole.printString(str)
 			end
 			local lineBuffer = StringBuffer.new()
 			for _, word in ipairs(words) do
-				if (fontGetTextWidth(consoleFont, lineBuffer:toString() .. word, 0) * debugFontScale) <= (consoleRect.x2 - consoleRect.x1) then
+				if (fontGetTextWidth(consoleFont, lineBuffer:toString() .. word, 0) * debugFontScale) <= (consoleRect.x2 - consoleRect.x1) * localCoordScale then
 					-- Looks good, add the word to the line buffer
 					lineBuffer:append(word .. ' ')
 				else
-					local lineBufStr = lineBuffer:toString()
-					for i=1,#consoleLines-1 do
-						consoleLines[i].text = consoleLines[i+1].text
+					lineBuffer:append(word)
+					local w = lineBuffer:toString()
+					-- for i=1,#consoleLines-1 do
+					-- 	consoleLines[i].text = consoleLines[i+1].text
+					-- end
+					-- consoleLines[#consoleLines].text = lineBufStr
+					-- print(lineBufStr)
+
+					local lineBufStr = ' '
+					local j = 1
+					while #lineBufStr > 0 do
+						lineBufStr = string.sub(w, 1 + (j-1)*lconsole.NUM_CONSOLE_COLS, j*lconsole.NUM_CONSOLE_COLS)
+						if #lineBufStr == 0 then break end
+						print(lineBufStr)
+						for i=1,#consoleLines-1 do
+							consoleLines[i].text = consoleLines[i+1].text
+						end
+						consoleLines[#consoleLines].text = lineBufStr
+						j = j+1
 					end
-					consoleLines[#consoleLines].text = lineBufStr
-					print(lineBufStr)
 
 					-- Create a new line buffer
 					lineBuffer = StringBuffer.new()
-					lineBuffer:append(word .. ' ')
+					-- lineBuffer:append(lineBufStr .. ' ')
 				end
 			end
 			-- Print any remaining content in the line buffer
 			if lineBuffer.length > 0 then
-				local lineBufStr = lineBuffer:toString()
-				for i=1,#consoleLines-1 do
-					consoleLines[i].text = consoleLines[i+1].text
+				local w = lineBuffer:toString()
+				local lineBufStr = ' '
+				local j = 1
+				while #lineBufStr > 0 do
+					lineBufStr = string.sub(w, 1 + (j-1)*lconsole.NUM_CONSOLE_COLS, j*lconsole.NUM_CONSOLE_COLS)
+					if #lineBufStr == 0 then break end
+					print(lineBufStr)
+					for i=1,#consoleLines-1 do
+						consoleLines[i].text = consoleLines[i+1].text
+					end
+					consoleLines[#consoleLines].text = lineBufStr
+					j = j+1
 				end
-				consoleLines[#consoleLines].text = lineBufStr
-				print(lineBufStr)
+				-- local lineBufStr = lineBuffer:toString()
+				-- for i=1,#consoleLines-1 do
+				-- 	consoleLines[i].text = consoleLines[i+1].text
+				-- end
+				-- consoleLines[#consoleLines].text = lineBufStr
+				-- print(lineBufStr)
 			end
 		end
 	end
@@ -958,7 +1000,7 @@ function lconsole.printString(str)
 end
 
 function lconsole.loop()
-	local debugFontScale = gameOption('debug.fontScale')
+	local debugFontScale = lconsole.FONT_SCALE
 	if debugmode("roundreset") then
 		didDisableCtrl = false
 	end
