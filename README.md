@@ -45,3 +45,7 @@ if not didInitializeManEntries and register_man ~= nil then
   didInitializeManEntries = true
 end
 ```
+
+## Known Issues
+
+* Word and text wrap isn't quite right for non-monospaced fonts. It's recommended you use a monospaced font for your debug font such as Courier or Cica.
