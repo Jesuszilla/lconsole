@@ -6,7 +6,7 @@ to I.K.E.M.E.N-Go, this module is for you!
 * Clipboard pasting (Ctrl+V)
 * Execute arbitrary Lua commands
 * Uses config.ini debug font setting (change your debug font to change the font in the LConsole terminal)
-* Dual output - prints to the interactive console as well as the terminal.
+* Dual output - prints to the interactive console as well as the terminal (through the `lconsole.print` and `lconsole.printString` methods).
 * Automatic text and word wrapping.
 
 ## Basic Usage
@@ -48,4 +48,4 @@ end
 
 ## Known Issues
 
-* Word and text wrap isn't quite right for non-monospaced fonts. It's recommended you use a monospaced font for your debug font such as Courier or Cica.
+* Word and text wrap isn't quite right for non-monospaced fonts. It's recommended you use a monospaced font for your debug font such as Courier or [Cica](https://github.com/miiton/Cica).

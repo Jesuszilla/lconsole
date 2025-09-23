@@ -84,6 +84,7 @@ lconsole.CURSOR_CHAR       = '_'  -- cursor character
 lconsole.CONSOLE_PREFIX    = '> ' -- console prefix string
 lconsole.FONT_SCALE        = 0.5  -- Uniform scale for terminal font
 lconsole.CONSOLE_WIDTH_PCT = 0.85 -- Console width (in percentage of screen width)
+lconsole.WRAP_CORRECTION   = 5    -- characters to cut off the end of strings (wrap correction)
 --#endregion
 
 -- Legacy MConsole command
@@ -706,6 +707,12 @@ register_man('xshear', "Returns the value of the player's xshear applied with Tr
 register_man('yangle', 'Returns the Y angle of the current entity.', 'None', 'yangle (float) - The Y angle of the current entity.')
 -- #endregion
 
+-- #region LCONSOLE MAN ENTRIES
+register_man('toggleConsole', 'Toggles the console on or off.', 'None')
+register_man('lconsole.print', 'Prints the given object to the interactive Lua console, handling any newlines (\\n) and word wrapping.', "obj (object) - Any object that can be converted to a printable output using the tostring() method.")
+register_man('lconsole.printString', 'Prints the given string to the interactive Lua console, handling any newlines (\\n) and word wrapping', 'str (string) - The string to print.')
+-- #endregion
+
 local blinkTimer = 0
 local drawCursor = false
 local consoleOn = false
@@ -766,7 +773,7 @@ function toggleConsole()
 			)
 
 			local singleCharWidth = fontGetTextWidth(consoleFont, 'W', 0) * debugFontScale
-			lconsole.NUM_CONSOLE_COLS = math.floor(consoleRect.x2 / singleCharWidth) - 3
+			lconsole.NUM_CONSOLE_COLS = math.floor(consoleRect.x2 / singleCharWidth) - lconsole.WRAP_CORRECTION
         end
 		if consoleText == nil then
 			-- Create the console text object
@@ -830,18 +837,6 @@ function findLuaMethod(text)
 		end
 	end
 
-	if ('findluamethod'):match(textLower) then
-		table.insert(foundMethods, 'findLuaMethod')
-	end
-
-	if ('man'):match(textLower) then
-		table.insert(foundMethods, 'man')
-	end
-
-	if ('register_man'):match(textLower) then
-		table.insert(foundMethodName, 'register_man')
-	end
-
 	if #foundMethods > 0 then
 		local foundMethodsStr = table.concat(foundMethods, ', ')
 		local sigStr = ('Method signatures matching provided text: %s'):format(foundMethodsStr)
@@ -853,11 +848,15 @@ end
 
 ---Prints the given string to the regular I.K.E.M.E.N console, taking care of any word wrapping and
 ---newlines
+---TODO: Fix this
 ---@param str string The string to print in the console.
 function printToConsoleFormatted(str)
 	-- Split by newline
 	local substrings = {}
-	local debugFontScale = lconsole.FONT_SCALE
+
+	local debugFontScale = gameOption('debug.FontScale')
+	local singleCharWidth = fontGetTextWidth(consoleFont, 'W', 0) * debugFontScale
+	local numDebugCols = math.floor(gameOption('video.GameWidth') / singleCharWidth)
 	for line in str:gmatch('([^\n]*)\n?') do
 		table.insert(substrings, line)
 	end
@@ -875,16 +874,34 @@ function printToConsoleFormatted(str)
 			local lineBuffer = StringBuffer.new()
 			for _, word in ipairs(words) do
 				local strToFit = lineBuffer:toString() .. ' ' .. word
-				if (fontGetTextWidth(consoleFont, strToFit, 0) * debugFontScale) <= (consoleRect.x2 - consoleRect.x1) * localCoordScale then
+				if (fontGetTextWidth(consoleFont, strToFit, 0) * debugFontScale) < gameOption('video.GameWidth') then
 					-- Looks good, add the word to the line buffer
 					lineBuffer:append(word .. ' ')
 				else
-					-- Dump current buffer
-					printConsole(lineBuffer:toString())
+					lineBuffer:append(word)
+					local w = lineBuffer:toString()
+					-- for i=1,#consoleLines-1 do
+					-- 	consoleLines[i].text = consoleLines[i+1].text
+					-- end
+					-- consoleLines[#consoleLines].text = lineBufStr
+					-- print(lineBufStr)
+
+					local lineBufStr = ' '
+					local j = 1
+					while #lineBufStr > 0 do
+						lineBufStr = string.sub(w, 1 + (j-1)*numDebugCols, j*numDebugCols)
+						if #lineBufStr == 0 then break end
+						printConsole(lineBufStr)
+						for i=1,#consoleLines-1 do
+							consoleLines[i].text = consoleLines[i+1].text
+						end
+						consoleLines[#consoleLines].text = lineBufStr
+						j = j+1
+					end
 
 					-- Create a new line buffer
 					lineBuffer = StringBuffer.new()
-					lineBuffer:append(word .. ' ')
+					-- lineBuffer:append(word .. ' ')
 				end
 			end
 			-- Print any remaining content in the line buffer
